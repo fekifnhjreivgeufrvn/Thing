@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TERRAINBEATS — osu!catch Terrain Rhythm</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; }
+  #canvas { display: block; width: 100vw; height: 100vh; }
+
+  #ui {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none; z-index: 10;
+  }
+
+  #header {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    text-align: center;
+  }
+  #title {
+    font-size: 11px; letter-spacing: 8px; text-transform: uppercase;
+    color: rgba(255,255,255,0.3); margin-bottom: 4px;
+  }
+  #song-name {
+    font-size: 18px; font-weight: bold; color: #fff;
+    text-shadow: 0 0 20px rgba(120,200,255,0.8);
+  }
+
+  #stats {
+    position: absolute; top: 20px; left: 24px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .stat-box {
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; padding: 6px 14px;
+    backdrop-filter: blur(10px);
+  }
+  .stat-label { font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.4); }
+  .stat-value { font-size: 20px; font-weight: bold; color: #7de8ff; }
+
+  #health-bar-container {
+    position: absolute; top: 20px; right: 24px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  }
+  #health-label { font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.4); }
+  #health-bar {
+    width: 160px; height: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  #health-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #ff4488, #ff8844);
+    border-radius: 4px;
+    transition: width 0.2s ease, background 0.3s;
+  }
+
+  #progress-bar-container {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+    background: rgba(255,255,255,0.08);
+  }
+  #progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #7de8ff, #ff88cc);
+    transition: width 0.1s linear;
+  }
+
+  #overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(6px);
+    pointer-events: all;
+    transition: opacity 0.4s;
+  }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+
+  #overlay-title {
+    font-size: 48px; font-weight: 900; letter-spacing: 4px;
+    background: linear-gradient(135deg, #7de8ff, #ff88cc);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  #overlay-sub {
+    font-size: 12px; letter-spacing: 6px; color: rgba(255,255,255,0.4);
+    margin-bottom: 40px;
+  }
+  #file-input-label {
+    display: inline-block; padding: 14px 36px;
+    border: 1px solid rgba(125,232,255,0.6);
+    border-radius: 8px; cursor: pointer;
+    font-size: 13px; letter-spacing: 3px;
+    color: #7de8ff;
+    background: rgba(125,232,255,0.08);
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+  #file-input-label:hover {
+    background: rgba(125,232,255,0.18);
+    box-shadow: 0 0 24px rgba(125,232,255,0.3);
+  }
+  #file-input { display: none; }
+
+  #demo-btn {
+    display: inline-block; padding: 10px 28px;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px; cursor: pointer;
+    font-size: 11px; letter-spacing: 3px;
+    color: rgba(255,255,255,0.5);
+    background: transparent;
+    transition: all 0.2s;
+  }
+  #demo-btn:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+
+  #instructions {
+    margin-top: 40px; font-size: 11px; letter-spacing: 2px;
+    color: rgba(255,255,255,0.25); text-align: center; line-height: 2;
+  }
+
+  #judgement-text {
+    position: absolute; left: 50%; bottom: 160px;
+    transform: translateX(-50%);
+    font-size: 28px; font-weight: 900; letter-spacing: 4px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.1s;
+    text-shadow: 0 0 30px currentColor;
+  }
+
+  #combo-display {
+    position: absolute; left: 50%; bottom: 200px;
+    transform: translateX(-50%);
+    font-size: 48px; font-weight: 900;
+    color: #fff; opacity: 0;
+    text-shadow: 0 0 40px rgba(125,232,255,0.8);
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  #game-over {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.9);
+    backdrop-filter: blur(8px);
+    pointer-events: all;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.5s;
+  }
+  #game-over.visible { opacity: 1; pointer-events: all; }
+  #game-over-title {
+    font-size: 64px; font-weight: 900; letter-spacing: 6px;
+    color: #ff4488; margin-bottom: 16px;
+    text-shadow: 0 0 40px rgba(255,68,136,0.6);
+  }
+  #final-score { font-size: 24px; color: #7de8ff; margin-bottom: 8px; }
+  #final-combo { font-size: 16px; color: rgba(255,255,255,0.5); margin-bottom: 40px; }
+  #restart-btn {
+    padding: 14px 40px; border: 1px solid #7de8ff;
+    border-radius: 8px; cursor: pointer;
+    font-size: 13px; letter-spacing: 3px; color: #7de8ff;
+    background: rgba(125,232,255,0.1);
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s;
+  }
+  #restart-btn:hover { background: rgba(125,232,255,0.25); box-shadow: 0 0 20px rgba(125,232,255,0.3); }
+
+  .diff-btn {
+    width: 100%; padding: 10px 20px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px; cursor: pointer;
+    font-size: 12px; letter-spacing: 2px;
+    color: rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.05);
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s; text-align: left;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .diff-btn:hover { background: rgba(125,232,255,0.15); border-color: rgba(125,232,255,0.5); color:#fff; }
+  .diff-btn .diff-stars { color: #ffcc44; font-size: 10px; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <div id="header">
+    <div id="title">TERRAINBEATS</div>
+    <div id="song-name">— SELECT A MAP —</div>
+  </div>
+
+  <!-- Pause button (top-right area, only shown during gameplay) -->
+  <button id="pause-btn" style="
+    position:absolute; top:20px; right:200px;
+    background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.15);
+    border-radius:6px; color:rgba(255,255,255,0.5); font-size:18px;
+    width:36px; height:36px; cursor:pointer; display:none;
+    font-family:monospace; backdrop-filter:blur(6px);
+    transition: all 0.2s; pointer-events:all;
+  ">⏸</button>
+
+  <!-- Pause menu -->
+  <div id="pause-menu" style="
+    position:absolute; inset:0; display:none;
+    flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(0,0,0,0.82); backdrop-filter:blur(8px);
+    pointer-events:all;
+  ">
+    <div style="font-size:48px;font-weight:900;letter-spacing:6px;
+      background:linear-gradient(135deg,#7de8ff,#ff88cc);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      margin-bottom:8px;">PAUSED</div>
+    <div style="font-size:11px;letter-spacing:5px;color:rgba(255,255,255,0.3);margin-bottom:40px;">ESC TO RESUME</div>
+    <button id="resume-btn" style="
+      padding:14px 40px; border:1px solid #7de8ff; border-radius:8px; cursor:pointer;
+      font-size:13px; letter-spacing:3px; color:#7de8ff;
+      background:rgba(125,232,255,0.1); font-family:'Courier New',monospace;
+      transition:all 0.2s; margin-bottom:14px; width:220px;
+    ">▶ RESUME</button>
+    <button id="pause-restart-btn" style="
+      padding:14px 40px; border:1px solid rgba(255,255,255,0.2); border-radius:8px; cursor:pointer;
+      font-size:13px; letter-spacing:3px; color:rgba(255,255,255,0.5);
+      background:transparent; font-family:'Courier New',monospace;
+      transition:all 0.2s; margin-bottom:14px; width:220px;
+    ">↺ RESTART</button>
+    <button id="pause-quit-btn" style="
+      padding:14px 40px; border:1px solid rgba(255,80,80,0.3); border-radius:8px; cursor:pointer;
+      font-size:13px; letter-spacing:3px; color:rgba(255,80,80,0.6);
+      background:transparent; font-family:'Courier New',monospace;
+      transition:all 0.2s; width:220px;
+    ">✕ QUIT TO MENU</button>
+  </div>
+
+  <div id="stats">
+    <div class="stat-box">
+      <div class="stat-label">SCORE</div>
+      <div class="stat-value" id="score-val">000000</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">COMBO</div>
+      <div class="stat-value" id="combo-val">0x</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">AR / SPEED</div>
+      <div class="stat-value" style="font-size:14px;" id="ar-val">—</div>
+    </div>
+  </div>
+
+  <div id="health-bar-container">
+    <div id="health-label">HEALTH</div>
+    <div id="health-bar"><div id="health-fill"></div></div>
+  </div>
+
+  <div id="progress-bar-container">
+    <div id="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <div id="judgement-text"></div>
+  <div id="combo-display"></div>
+
+  <!-- Countdown display -->
+  <div id="countdown" style="
+    position:absolute; inset:0; display:none;
+    align-items:center; justify-content:center; flex-direction:column;
+    pointer-events:none;
+  ">
+    <div id="countdown-num" style="
+      font-size:120px; font-weight:900; letter-spacing:4px;
+      background: linear-gradient(135deg,#7de8ff,#ff88cc);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+      text-shadow: none; line-height:1;
+    ">3</div>
+    <div style="font-size:12px;letter-spacing:6px;color:rgba(255,255,255,0.4);margin-top:8px;">MOVE TO POSITION</div>
+  </div>
+
+  <div id="overlay">
+    <div id="overlay-title">TERRAINBEATS</div>
+    <div id="overlay-sub">OSU!CATCH TERRAIN RUNNER</div>
+    <label id="file-input-label" for="file-input">⬆ LOAD .OSU / .OSZ FILE</label>
+    <input type="file" id="file-input" accept=".osu,.osz">
+    <div id="diff-picker" style="display:none;flex-direction:column;align-items:center;gap:8px;margin-bottom:16px;max-height:260px;overflow-y:scroll;width:360px;touch-action:pan-y;overscroll-behavior:contain;">
+      <div style="font-size:10px;letter-spacing:3px;color:rgba(255,255,255,0.4);margin-bottom:4px;">SELECT DIFFICULTY</div>
+    </div>
+    <button id="demo-btn">▶ PLAY DEMO MAP</button>
+    <div id="instructions">
+      MOVE MOUSE / TOUCH LEFT-RIGHT TO CONTROL THE BALL<br>
+      STAY ON THE PLATFORMS · DON'T FALL · SURVIVE
+    </div>
+  </div>
+
+  <div id="game-over">
+    <div id="game-over-title">FELL OFF</div>
+    <div id="final-score"></div>
+    <div id="final-combo"></div>
+    <button id="restart-btn">↺ RESTART</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const LANE_WIDTH = 16;
+const LANE_DEPTH = 600;
+const SEGMENT_LENGTH = 3.5;
+const BALL_Y_BASE = 0.7;
+const CAMERA_HEIGHT = 6;
+const CAMERA_BACK = 9;
+const SCROLL_SPEED_BASE = 18; // units/sec
+const PLATFORM_H = 0.35;
+const FALL_Y = -6;
+const HEALTH_DRAIN = 0.06; // per frame off platform
+const HEALTH_REGEN = 0.015;
+const OSU_CATCH_CS_DEFAULT = 5;
+
+// ─── THREE SETUP ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000814, 0.022);
+scene.background = new THREE.Color(0x000814);
+
+const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 800);
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── LIGHTING ─────────────────────────────────────────────────────────────────
+const ambientLight = new THREE.AmbientLight(0x112244, 1.2);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0x7de8ff, 2.5);
+dirLight.position.set(0, 20, -10);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 200;
+dirLight.shadow.camera.left = -20;
+dirLight.shadow.camera.right = 20;
+dirLight.shadow.camera.top = 20;
+dirLight.shadow.camera.bottom = -20;
+scene.add(dirLight);
+
+const rimLight = new THREE.DirectionalLight(0xff88cc, 1.2);
+rimLight.position.set(0, 5, 20);
+scene.add(rimLight);
+
+const pointLight = new THREE.PointLight(0x7de8ff, 3, 30);
+pointLight.position.set(0, 4, 0);
+scene.add(pointLight);
+
+// ─── LANE FLOOR (visual guides) ──────────────────────────────────────────────
+const laneGeom = new THREE.PlaneGeometry(LANE_WIDTH, LANE_DEPTH);
+const laneMat = new THREE.MeshStandardMaterial({
+  color: 0x050a18,
+  roughness: 0.9,
+  metalness: 0.1,
+  transparent: true,
+  opacity: 0.95,
+});
+const laneFloor = new THREE.Mesh(laneGeom, laneMat);
+laneFloor.rotation.x = -Math.PI / 2;
+laneFloor.position.y = -0.5;
+laneFloor.position.z = -LANE_DEPTH / 2 + 20;
+laneFloor.receiveShadow = true;
+scene.add(laneFloor);
+
+// Lane grid lines
+function makeLaneLines() {
+  const group = new THREE.Group();
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x1a3a6a, transparent: true, opacity: 0.5 });
+  // Vertical
+  for (let x = -LANE_WIDTH/2; x <= LANE_WIDTH/2; x += LANE_WIDTH/8) {
+    const pts = [new THREE.Vector3(x, -0.49, 10), new THREE.Vector3(x, -0.49, -LANE_DEPTH)];
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+  }
+  // Horizontal grid
+  for (let z = 0; z > -LANE_DEPTH; z -= 4) {
+    const pts = [new THREE.Vector3(-LANE_WIDTH/2, -0.49, z), new THREE.Vector3(LANE_WIDTH/2, -0.49, z)];
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+  }
+  scene.add(group);
+}
+makeLaneLines();
+
+// Side walls (neon trim)
+function makeSideWalls() {
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0x0a1530, roughness: 0.8, metalness: 0.2 });
+  const edgeMat = new THREE.MeshStandardMaterial({
+    color: 0x7de8ff, emissive: 0x7de8ff, emissiveIntensity: 0.8, roughness: 0.2,
+  });
+  for (const sx of [-1, 1]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2, LANE_DEPTH), wallMat);
+    wall.position.set(sx * (LANE_WIDTH/2 + 0.15), 0.5, -LANE_DEPTH/2 + 20);
+    scene.add(wall);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, LANE_DEPTH), edgeMat);
+    edge.position.set(sx * (LANE_WIDTH/2 + 0.03), 1.5, -LANE_DEPTH/2 + 20);
+    scene.add(edge);
+  }
+}
+makeSideWalls();
+
+// Judgement line glow
+const jlineGeom = new THREE.BoxGeometry(LANE_WIDTH, 0.08, 0.08);
+const jlineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 2 });
+const judgementLine = new THREE.Mesh(jlineGeom, jlineMat);
+judgementLine.position.set(0, 0.02, 0);
+scene.add(judgementLine);
+
+// ─── BALL ────────────────────────────────────────────────────────────────────
+const ballGroup = new THREE.Group();
+scene.add(ballGroup);
+
+const ballGeom = new THREE.SphereGeometry(0.55, 32, 32);
+const ballMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  emissive: 0x7de8ff,
+  emissiveIntensity: 0.6,
+  roughness: 0.2,
+  metalness: 0.7,
+});
+const ballMesh = new THREE.Mesh(ballGeom, ballMat);
+ballMesh.castShadow = true;
+ballGroup.add(ballMesh);
+
+// Ball glow
+const glowGeom = new THREE.SphereGeometry(0.8, 16, 16);
+const glowMat = new THREE.MeshBasicMaterial({ color: 0x7de8ff, transparent: true, opacity: 0.12, side: THREE.BackSide });
+const glowMesh = new THREE.Mesh(glowGeom, glowMat);
+ballGroup.add(glowMesh);
+
+// Ball inner core
+const coreGeom = new THREE.SphereGeometry(0.25, 16, 16);
+const coreMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 2 });
+const coreMesh = new THREE.Mesh(coreGeom, coreMat);
+ballGroup.add(coreMesh);
+
+// Ball trail
+const trailPoints = [];
+const MAX_TRAIL = 20;
+const trailGeom = new THREE.BufferGeometry();
+const trailMat = new THREE.LineBasicMaterial({ color: 0x7de8ff, transparent: true, opacity: 0.4 });
+const trailLine = new THREE.Line(trailGeom, trailMat);
+scene.add(trailLine);
+
+// Point light following ball
+const ballLight = new THREE.PointLight(0x7de8ff, 4, 10);
+scene.add(ballLight);
+
+// ─── PARTICLES ───────────────────────────────────────────────────────────────
+const particles = [];
+const particlePool = [];
+
+function spawnParticle(x, y, z, color) {
+  let p;
+  if (particlePool.length > 0) {
+    p = particlePool.pop();
+    p.mesh.visible = true;
+  } else {
+    const geom = new THREE.SphereGeometry(0.1, 6, 6);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true });
+    p = { mesh: new THREE.Mesh(geom, mat), vx: 0, vy: 0, vz: 0, life: 0, maxLife: 0 };
+    scene.add(p.mesh);
+  }
+  p.mesh.material.color.set(color);
+  p.mesh.position.set(x, y, z);
+  p.vx = (Math.random() - 0.5) * 4;
+  p.vy = Math.random() * 5 + 2;
+  p.vz = (Math.random() - 0.5) * 2;
+  p.life = 0;
+  p.maxLife = 0.5 + Math.random() * 0.3;
+  particles.push(p);
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life += dt;
+    if (p.life >= p.maxLife) {
+      p.mesh.visible = false;
+      particlePool.push(p);
+      particles.splice(i, 1);
+      continue;
+    }
+    const t = p.life / p.maxLife;
+    p.mesh.position.x += p.vx * dt;
+    p.mesh.position.y += p.vy * dt;
+    p.vy -= 12 * dt;
+    p.mesh.position.z += p.vz * dt;
+    p.mesh.material.opacity = 1 - t;
+    const s = (1 - t) * 0.8 + 0.2;
+    p.mesh.scale.setScalar(s);
+  }
+}
+
+// ─── PLATFORM SYSTEM ─────────────────────────────────────────────────────────
+const platformPool = [];
+const activePlatforms = [];
+
+function getPlatformMesh(width, depth) {
+  let p;
+  if (platformPool.length > 0) {
+    p = platformPool.pop();
+    p.visible = true;
+  } else {
+    const geom = new THREE.BoxGeometry(1, PLATFORM_H, 1);
+    const mkSide = () => new THREE.MeshStandardMaterial({
+      color: 0x1a3a6a, emissive: 0x1a3a6a, emissiveIntensity: 0,
+      roughness: 0.4, metalness: 0.6,
+    });
+    const materials = [
+      mkSide(), mkSide(),
+      new THREE.MeshStandardMaterial({  // top face
+        color: 0x2a6aaa, emissive: 0x2a6aaa, emissiveIntensity: 0.1,
+        roughness: 0.3, metalness: 0.8,
+      }),
+      new THREE.MeshStandardMaterial({  // bottom
+        color: 0x0d1a30, emissive: 0x000000, emissiveIntensity: 0,
+        roughness: 0.8, metalness: 0.3,
+      }),
+      mkSide(), mkSide(),
+    ];
+    p = new THREE.Mesh(geom, materials);
+    p.castShadow = true;
+    p.receiveShadow = true;
+    scene.add(p);
+  }
+  p.scale.set(width, 1, depth);
+  return p;
+}
+
+// ─── OSU! CATCH PARSER ───────────────────────────────────────────────────────
+function parseOsuCatch(text) {
+  const lines = text.split('\n').map(l => l.trim());
+  let section = '';
+  const hitObjects = [];
+  let timingPoints = [];
+  let metadata = { title: 'Unknown', artist: 'Unknown' };
+  let cs = OSU_CATCH_CS_DEFAULT;
+  let mode = 0;
+
+  for (const line of lines) {
+    if (line.startsWith('[')) { section = line; continue; }
+    if (!line || line.startsWith('//')) continue;
+
+    if (section === '[Metadata]') {
+      if (line.startsWith('Title:')) metadata.title = line.slice(6).trim();
+      if (line.startsWith('Artist:')) metadata.artist = line.slice(7).trim();
+    }
+    if (section === '[Difficulty]') {
+      if (line.startsWith('CircleSize:')) cs = parseFloat(line.split(':')[1]);
+      if (line.startsWith('ApproachRate:')) metadata.ar = parseFloat(line.split(':')[1]);
+      if (line.startsWith('OverallDifficulty:') && metadata.ar === undefined)
+        metadata.ar = parseFloat(line.split(':')[1]); // fallback for old maps
+      if (line.startsWith('SliderMultiplier:')) metadata.sliderMult = parseFloat(line.split(':')[1]);
+    }
+    if (section === '[General]') {
+      if (line.startsWith('Mode:')) mode = parseInt(line.split(':')[1].trim());
+    }
+    if (section === '[TimingPoints]') {
+      const parts = line.split(',');
+      if (parts.length >= 2) {
+        timingPoints.push({ time: parseFloat(parts[0]), beatLength: parseFloat(parts[1]) });
+      }
+    }
+    if (section === '[HitObjects]') {
+      const parts = line.split(',');
+      if (parts.length < 4) continue;
+      const x = parseInt(parts[0]);
+      const time = parseInt(parts[2]);
+      const type = parseInt(parts[3]);
+      hitObjects.push({ x, time, type, raw: parts });
+    }
+  }
+
+  // Map x [0..512] to lane [-LANE_WIDTH/2..LANE_WIDTH/2]
+  const notes = hitObjects.map(o => ({
+    time: o.time / 1000, // seconds
+    x: (o.x / 512) * LANE_WIDTH - LANE_WIDTH / 2,
+    type: o.type,
+  }));
+
+  // Sort by time
+  notes.sort((a, b) => a.time - b.time);
+  return { notes, metadata, cs, ar: metadata.ar !== undefined ? metadata.ar : 5 };
+}
+
+// ─── DEMO MAP GENERATOR ──────────────────────────────────────────────────────
+function generateDemoNotes() {
+  const notes = [];
+  const bpm = 140;
+  const beat = 60 / bpm;
+  const duration = 90; // seconds
+  let t = 1;
+  let x = 0;
+  while (t < duration) {
+    const dir = Math.random() > 0.5 ? 1 : -1;
+    const move = Math.random() * 5;
+    x = Math.max(-LANE_WIDTH/2 + 1, Math.min(LANE_WIDTH/2 - 1, x + dir * move));
+    notes.push({ time: t, x });
+    // Sometimes add a second note close by for wider platforms
+    if (Math.random() > 0.6) {
+      const x2 = Math.max(-LANE_WIDTH/2 + 1, Math.min(LANE_WIDTH/2 - 1, x + (Math.random() - 0.5) * 3));
+      notes.push({ time: t + beat * 0.25, x: x2 });
+    }
+    t += beat * (Math.random() > 0.7 ? 0.5 : 1);
+  }
+  notes.sort((a, b) => a.time - b.time);
+  return { notes, metadata: { title: 'DEMO MAP', artist: 'TERRAINBEATS' }, cs: 5, ar: 5 };
+}
+
+// ─── PLATFORM BUILDER ────────────────────────────────────────────────────────
+function buildPlatforms(notes, cs, spd) {
+  spd = spd || SCROLL_SPEED_BASE;
+  // Step 1: Group nearby notes (close in time AND x) into single platform spans
+  const MERGE_TIME = 0.22;
+  const MERGE_X = 5;
+  const used = new Array(notes.length).fill(false);
+  const groups = [];
+
+  for (let i = 0; i < notes.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    let minX = notes[i].x, maxX = notes[i].x;
+    let minTime = notes[i].time, maxTime = notes[i].time;
+
+    for (let j = i + 1; j < notes.length; j++) {
+      if (used[j]) continue;
+      if (notes[j].time - minTime > MERGE_TIME) break;
+      if (Math.abs(notes[j].x - (minX + maxX) / 2) < MERGE_X) {
+        minX = Math.min(minX, notes[j].x);
+        maxX = Math.max(maxX, notes[j].x);
+        maxTime = Math.max(maxTime, notes[j].time);
+        used[j] = true;
+      }
+    }
+
+    const csWidth = Math.max(1.5, 5 - cs * 0.35);
+    const noteWidth = maxX - minX + csWidth;
+    groups.push({
+      time: minTime,         // when this platform's FRONT reaches the ball
+      endTime: maxTime,      // when this platform's BACK reaches the ball
+      centerX: (minX + maxX) / 2,
+      width: Math.max(2.5, noteWidth),
+    });
+  }
+
+  groups.sort((a, b) => a.time - b.time);
+
+  // Step 2: Build result array with depth = exact distance to fill gap to next platform
+  const result = [];
+
+  // Starting platform — always centered at x=0 so ball lands on it at start
+  const firstTime = groups.length > 0 ? groups[0].time : 2;
+  result.push({
+    time: 0,
+    endTime: firstTime,
+    centerX: 0,   // always centered so ball starts on it
+    width: 8,
+    depth: firstTime * spd + 5, // long enough to last until first real platform
+    isStart: true,
+  });
+
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const next = groups[i + 1];
+    // Depth spans from this platform's time to the next platform's time (+ overlap)
+    const dtToNext = next ? (next.time - g.time) : 1.0;
+    // Minimum depth to cover the note duration itself
+    const selfDepth = (g.endTime - g.time) * spd + 2.5;
+    // Full depth to reach next platform
+    const fullDepth = dtToNext * spd + 1.0;
+    result.push({
+      ...g,
+      depth: Math.max(selfDepth, 2.0),
+      gapToNext: next ? Math.max(0, (next.time - g.endTime) * spd - 1.0) : 0,
+      dtToNext: next ? (next.time - g.time) : 0,
+    });
+  }
+
+  return result;
+}
+
+// ─── GAME STATE ──────────────────────────────────────────────────────────────
+// Jump-height colour palette (applied to each platform based on the vy needed to reach the next)
+const JUMP_COLORS = [
+  { vy: 0,  top: 0x44ff88, topEmit: 0x22cc66, side: 0x0d5c30 }, // green  — tiny/no jump
+  { vy: 4,  top: 0x44ddff, topEmit: 0x22aacc, side: 0x0d4a60 }, // cyan   — small
+  { vy: 8,  top: 0xffee44, topEmit: 0xccbb22, side: 0x5c4a00 }, // yellow — medium
+  { vy: 13, top: 0xff8844, topEmit: 0xcc6622, side: 0x5c2a00 }, // orange — high
+  { vy: 18, top: 0xff3333, topEmit: 0xcc1111, side: 0x5c0808 }, // red    — extreme
+];
+
+function jumpColorForVY(vy) {
+  let c = JUMP_COLORS[0];
+  for (const tier of JUMP_COLORS) { if (vy >= tier.vy) c = tier; else break; }
+  return c;
+}
+
+function assignPlatformColors(plats, spd) {
+  for (let i = 0; i < plats.length; i++) {
+    const curr = plats[i];
+    const next = plats[i + 1];
+    if (!next) { curr.jc = jumpColorForVY(0); curr.jumpVY = 0; continue; }
+    const gapSec = Math.max(0, next.time - curr.endTime);
+    const dtToNext = gapSec + (next.depth * 0.25) / spd;
+    const vy = Math.max(2, (22 * dtToNext) / 2);
+    curr.jumpVY = vy;
+    curr.jc = jumpColorForVY(vy);
+  }
+}
+let gameData = null;
+let platforms = [];
+let scrollZ = 0;  // how far we've scrolled
+let gameRunning = false;
+let gameOver = false;
+let score = 0;
+let combo = 0;
+let maxCombo = 0;
+let health = 1.0;
+let songTime = 0;
+let targetBallX = 0;
+let currentBallX = 0;
+let ballY = BALL_Y_BASE;
+let ballVY = 0;
+let isOnPlatform = false;
+let wasOnPlatform = false;
+let lastJudgeTime = -1;
+let judgeVisible = false;
+let comboVisible = false;
+let comboTimeout = null;
+let scrollSpeed = SCROLL_SPEED_BASE;
+let lastTime = null;
+let countdown = 0;
+let countdownActive = false;
+let paused = false;
+
+// ─── INPUT ───────────────────────────────────────────────────────────────────
+let mouseX = 0;
+
+window.addEventListener('mousemove', e => {
+  // Map mouse X to lane X
+  const t = e.clientX / window.innerWidth;
+  mouseX = (t - 0.5) * LANE_WIDTH;
+});
+
+window.addEventListener('touchmove', e => {
+  // Allow native scroll inside the difficulty picker list
+  if (e.target.closest && e.target.closest('#diff-picker')) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const t = touch.clientX / window.innerWidth;
+  mouseX = (t - 0.5) * LANE_WIDTH;
+}, { passive: false });
+
+window.addEventListener('touchstart', e => {
+  const touch = e.touches[0];
+  const t = touch.clientX / window.innerWidth;
+  mouseX = (t - 0.5) * LANE_WIDTH;
+}, { passive: false });
+
+// ─── PLATFORM MESH MANAGER ───────────────────────────────────────────────────
+const activeMeshes = []; // {mesh, platform, z}
+
+function platformZPos(platform, scrollZ) {
+  // Platform appears at z = -(platform.time * SCROLL_SPEED_BASE - scrollZ)
+  return -(platform.time * scrollSpeed - scrollZ);
+}
+
+function updatePlatformMeshes() {
+  // Only despawn platforms that are well behind the ball (the ball is always at z=0 in world,
+  // platforms scroll towards +z, so a platform whose FRONT EDGE is past +4 is behind the ball)
+  for (let i = activeMeshes.length - 1; i >= 0; i--) {
+    const item = activeMeshes[i];
+    const zFront = platformZPos(item.platform, scrollZ); // front edge z
+    if (zFront > 12) { // well behind the ball — safe to remove
+      item.mesh.visible = false;
+      platformPool.push(item.mesh);
+      activeMeshes.splice(i, 1);
+    }
+  }
+
+  // Spawn platforms that are coming into view
+  const activeSet = new Set(activeMeshes.map(m => m.platform));
+
+  for (const platform of platforms) {
+    if (activeSet.has(platform)) continue;
+    const z = platformZPos(platform, scrollZ);
+    // Spawn when front edge is within view, don't despawn until well behind
+    if (z < 8 && z > -LANE_DEPTH + 20) {
+      const mesh = getPlatformMesh(platform.width, platform.depth);
+      // Apply jump-height colour to this platform
+      const jc = platform.jc || { top: 0x2a6aaa, topEmit: 0x1a4a8a, side: 0x1a3a6a };
+      mesh.material[2].color.setHex(jc.top);
+      mesh.material[2].emissive.setHex(jc.topEmit);
+      for (const si of [0, 1, 4, 5]) {
+        mesh.material[si].color.setHex(jc.side);
+        mesh.material[si].emissive.setHex(jc.side);
+      }
+      activeMeshes.push({ mesh, platform, z });
+    }
+  }
+
+  // Update all active mesh positions + approach brightness
+  for (const item of activeMeshes) {
+    const z = platformZPos(item.platform, scrollZ);
+    item.mesh.position.set(item.platform.centerX, 0, z - item.platform.depth / 2);
+    item.z = z;
+
+    // Proximity brightness: dim far ahead, fully lit as it arrives at z=0
+    // zFront is negative when platform is ahead, approaches 0 as it reaches the ball
+    const distAhead = Math.max(0, -z); // positive = platform is ahead
+    const t = Math.max(0, Math.min(1, 1 - distAhead / 55)); // 0 at 55 units, 1 at z=0
+    item.mesh.material[2].emissiveIntensity = 0.05 + t * 1.6;  // top face
+    const sideInt = t * 0.55;
+    for (const si of [0, 1, 4, 5]) item.mesh.material[si].emissiveIntensity = sideInt;
+  }
+}
+
+// ─── COLLISION / GROUNDING ───────────────────────────────────────────────────
+// Ball is always rendered at world z=0. Platforms scroll past it.
+// We check if the platform's mesh currently straddles z=0.
+function checkPlatformCollision(ballX, ballY) {
+  const ballBottom = ballY - 0.55; // ball radius
+  const pTopY = PLATFORM_H / 2;
+  const pBotY = -PLATFORM_H / 2;
+
+  for (const item of activeMeshes) {
+    const mesh = item.mesh;
+    const p = item.platform;
+
+    // Mesh center position (world space)
+    const mz = mesh.position.z; // center z of platform mesh
+    const mx = mesh.position.x; // center x
+
+    const halfW = (p.width / 2) + 0.3;  // small tolerance
+    const halfD = (p.depth / 2) + 0.3;
+
+    // Is the ball's x within platform x range?
+    if (ballX < mx - halfW || ballX > mx + halfW) continue;
+
+    // Is z=0 (ball's world z) within the platform's z extent?
+    if (0 < mz - halfD || 0 > mz + halfD) continue;
+
+    // Is the ball bottom near the platform top (landing check)?
+    if (ballBottom <= pTopY + 0.15 && ballBottom >= pBotY - 0.6 && ballVY <= 0.05) {
+      return pTopY;
+    }
+  }
+  return null;
+}
+
+// ─── AUTO-JUMP SYSTEM ─────────────────────────────────────────────────────────
+// Coordinate system:
+//   Platforms start at large NEGATIVE Z (far ahead), scroll toward POSITIVE Z (behind ball).
+//   Ball is fixed at world Z = 0.
+//   mesh.position.z = center Z of platform mesh.
+//   Trailing edge (ball walks off here) = mesh.position.z + depth/2
+//     Starts very negative → approaches 0 → goes positive (platform now behind ball).
+//   Jump fires when trailing edge is within JUMP_LEAD of 0.
+
+const GRAVITY = 22;
+let jumpScheduled = false;
+
+function getStandingPlatformIdx() {
+  for (let i = 0; i < platforms.length; i++) {
+    const mItem = activeMeshes.find(m => m.platform === platforms[i]);
+    if (!mItem) continue;
+    const mz = mItem.mesh.position.z;
+    const mx = mItem.mesh.position.x;
+    const hw = platforms[i].width / 2 + 0.5;
+    const hd = platforms[i].depth / 2 + 0.5;
+    if (currentBallX >= mx - hw && currentBallX <= mx + hw &&
+        0 >= mz - hd && 0 <= mz + hd) return i;
+  }
+  return -1;
+}
+
+function checkAutoJump() {
+  if (!isOnPlatform || jumpScheduled) return;
+
+  const curIdx = getStandingPlatformIdx();
+  if (curIdx < 0 || curIdx + 1 >= platforms.length) return;
+
+  const cpMesh = activeMeshes.find(m => m.platform === platforms[curIdx]);
+  if (!cpMesh) return;
+
+  // Trailing edge of current platform (goes from negative → 0 → positive as platform scrolls past)
+  const trailingEdgeZ = cpMesh.mesh.position.z + platforms[curIdx].depth / 2;
+
+  // Jump when trailing edge is within JUMP_LEAD world-units of z=0
+  const JUMP_LEAD = 3.5;
+  if (trailingEdgeZ < -JUMP_LEAD) return;
+
+  const cp = platforms[curIdx];
+  const np = platforms[curIdx + 1];
+  // Use songTime (not cp.time) so flight time reflects the actual moment the
+  // jump fires, not when the platform's front arrived (which overestimates).
+  // Target 1/4 into the next platform so the ball has room to ride without
+  // sliding off the trailing edge.
+  const dtToNext = (np.time - songTime) + (np.depth * 0.25) / scrollSpeed;
+  if (dtToNext <= 0) { jumpScheduled = true; return; }
+
+  // Solve for vy: flight time = 2*vy/g
+  const vy = (GRAVITY * dtToNext / 2);
+
+  ballVY = Math.max(2, vy);
+  ballY += 0.15; // lift off surface before collision re-grabs us
+  jumpScheduled = true;
+  isOnPlatform = false;
+  for (let k = 0; k < 8; k++) spawnParticle(currentBallX, ballY, 0, 0xffee44);
+}
+
+function onBallLand() {
+  jumpScheduled = false;
+  isOnPlatform = true;
+  combo++;
+  maxCombo = Math.max(maxCombo, combo);
+  addScore(100);
+  showJudgement('LAND!', '#7de8ff');
+  showCombo(combo);
+  document.getElementById('combo-val').textContent = combo + 'x';
+  for (let k = 0; k < 6; k++) spawnParticle(currentBallX, ballY, 0, 0x7de8ff);
+}
+function addScore(pts) {
+  score += pts * (1 + combo * 0.1);
+  document.getElementById('score-val').textContent = String(Math.floor(score)).padStart(6, '0');
+}
+
+function showJudgement(text, color) {
+  const el = document.getElementById('judgement-text');
+  el.textContent = text;
+  el.style.color = color;
+  el.style.opacity = '1';
+  clearTimeout(judgeVisible);
+  judgeVisible = setTimeout(() => { el.style.opacity = '0'; }, 600);
+}
+
+function showCombo(c) {
+  if (c < 3) return;
+  const el = document.getElementById('combo-display');
+  el.textContent = c + 'x';
+  el.style.opacity = '1';
+  clearTimeout(comboTimeout);
+  comboTimeout = setTimeout(() => { el.style.opacity = '0'; }, 800);
+}
+
+// ─── GAME LOOP ────────────────────────────────────────────────────────────────
+let platformCheckTimer = 0;
+const PLATFORM_CHECK_INTERVAL = 0.15; // seconds
+
+function startGame(data) {
+  gameData = data;
+  // AR drives scroll speed: AR 5 = base, AR 0 = 50% speed, AR 10 = 150% speed
+  const ar = (data.ar !== undefined ? data.ar : (data.metadata && data.metadata.ar !== undefined ? data.metadata.ar : 5));
+  scrollSpeed = SCROLL_SPEED_BASE * (0.5 + ar * 0.1);
+  platforms = buildPlatforms(data.notes, data.cs || OSU_CATCH_CS_DEFAULT, scrollSpeed);
+  assignPlatformColors(platforms, scrollSpeed);
+  scrollZ = 0;
+  songTime = 0;
+  score = 0;
+  combo = 0;
+  maxCombo = 0;
+  health = 1.0;
+  ballVY = 0;
+  currentBallX = 0;
+  targetBallX = 0;
+  gameRunning = false; // will be set true after countdown
+  gameOver = false;
+  isOnPlatform = false;
+  lastTime = null;
+  jumpScheduled = false;
+  countdownActive = true;
+  countdown = 3.0;
+
+  // Place ball on starting platform immediately (so it's visible during countdown)
+  const startP = platforms[0];
+  ballY = PLATFORM_H / 2 + 0.55;
+  isOnPlatform = true;
+
+  // Clear active meshes
+  for (const item of activeMeshes) {
+    item.mesh.visible = false;
+    platformPool.push(item.mesh);
+  }
+  activeMeshes.length = 0;
+  particles.length = 0;
+
+  document.getElementById('ar-val').textContent = `AR${ar.toFixed(1)} · ${scrollSpeed.toFixed(0)} u/s`;
+  document.getElementById('combo-val').textContent = '0x';
+  document.getElementById('score-val').textContent = '000000';
+  document.getElementById('health-fill').style.width = '100%';
+  document.getElementById('health-fill').style.background = 'linear-gradient(90deg, #ff4488, #ff8844)';
+  document.getElementById('song-name').textContent = `${data.metadata.artist} — ${data.metadata.title}`;
+  document.getElementById('game-over').classList.remove('visible');
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('countdown').style.display = 'flex';
+  document.getElementById('countdown-num').textContent = '3';
+  document.getElementById('pause-btn').style.display = 'none';
+  document.getElementById('pause-menu').style.display = 'none';
+  paused = false;
+}
+
+function triggerGameOver() {
+  gameOver = true;
+  gameRunning = false;
+  paused = false;
+  document.getElementById('pause-btn').style.display = 'none';
+  document.getElementById('pause-menu').style.display = 'none';
+  document.getElementById('final-score').textContent = 'SCORE: ' + Math.floor(score).toLocaleString();
+  document.getElementById('final-combo').textContent = 'MAX COMBO: ' + maxCombo + 'x';
+  document.getElementById('game-over').classList.add('visible');
+
+  // Explode particles
+  for (let i = 0; i < 30; i++) {
+    spawnParticle(currentBallX, ballY, 0, 0xff4488);
+  }
+}
+
+function animate(timestamp) {
+  requestAnimationFrame(animate);
+
+  const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.05) : 0.016;
+  lastTime = timestamp;
+
+  // ── PAUSE ────────────────────────────────────────────────────────────────────
+  if (paused) {
+    renderer.render(scene, camera);
+    return;
+  }
+  if (countdownActive) {
+    countdown -= dt;
+    const remaining = Math.ceil(countdown);
+    const numEl = document.getElementById('countdown-num');
+    if (remaining > 0) {
+      numEl.textContent = remaining;
+    } else {
+      // Countdown finished — launch the game
+      countdownActive = false;
+      gameRunning = true;
+      document.getElementById('countdown').style.display = 'none';
+      document.getElementById('pause-btn').style.display = 'flex';
+    }
+
+    // During countdown: allow ball X movement, keep ball on start platform, don't scroll
+    targetBallX = Math.max(-LANE_WIDTH/2 + 0.6, Math.min(LANE_WIDTH/2 - 0.6, mouseX));
+    currentBallX += (targetBallX - currentBallX) * Math.min(1, dt * 12);
+    ballY = PLATFORM_H / 2 + 0.55;
+    ballVY = 0;
+    isOnPlatform = true;
+
+    // Render the starting platform mesh so player can see where they're standing
+    updatePlatformMeshes();
+
+    ballGroup.position.set(currentBallX, ballY, 0);
+    ballLight.position.set(currentBallX, ballY + 2, 2);
+    ballMesh.rotation.z += dt * 3;
+
+    const camTargetX = currentBallX * 0.2;
+    camera.position.x += (camTargetX - camera.position.x) * 0.05;
+    camera.position.y = CAMERA_HEIGHT;
+    camera.position.z = CAMERA_BACK;
+    camera.lookAt(camera.position.x * 0.3, 0.5, -8);
+    renderer.render(scene, camera);
+    return;
+  }
+
+  if (gameRunning && !gameOver) {
+    songTime += dt;
+    scrollZ += scrollSpeed * dt;
+
+    // Update ball X (smooth follow)
+    targetBallX = Math.max(-LANE_WIDTH/2 + 0.6, Math.min(LANE_WIDTH/2 - 0.6, mouseX));
+    currentBallX += (targetBallX - currentBallX) * Math.min(1, dt * 12);
+
+    // Auto-jump check (before collision so jump fires while still grounded)
+    checkAutoJump();
+
+    // Platform collision — only land when ball is moving downward (ballVY <= 0)
+    const groundY = checkPlatformCollision(currentBallX, ballY);
+    if (groundY !== null && ballVY <= 0) {
+      const wasAirborne = !isOnPlatform;
+      ballY = groundY + 0.55;
+      ballVY = 0;
+      if (wasAirborne) {
+        onBallLand();
+      } else {
+        isOnPlatform = true;
+      }
+    } else if (groundY === null) {
+      isOnPlatform = false;
+      ballVY -= GRAVITY * dt;
+      ballY += ballVY * dt;
+
+      // Instant death — no health drain, just die immediately once clearly off any platform
+      if (ballY < PLATFORM_H / 2 - 1.5 && !gameOver) {
+        triggerGameOver();
+      }
+    }
+
+    // Health — only regen on platform; instant death handles the fall case above
+    if (isOnPlatform) {
+      health = Math.min(1, health + HEALTH_REGEN * dt);
+    }
+    wasOnPlatform = isOnPlatform;
+
+    // Health bar — always full green while alive (death is instant now)
+    document.getElementById('health-fill').style.width = (health * 100) + '%';
+    document.getElementById('health-fill').style.background = 'linear-gradient(90deg, #44ff88, #88ff44)';
+
+    // Progress
+    const totalTime = platforms.length > 0 ? platforms[platforms.length - 1].time + 2 : 1;
+    document.getElementById('progress-fill').style.width = Math.min(100, (songTime / totalTime) * 100) + '%';
+
+    // Check if song ended
+    if (songTime > totalTime + 2) {
+      triggerGameOver();
+      document.getElementById('game-over-title').textContent = 'CLEAR!';
+      document.getElementById('game-over-title').style.color = '#7de8ff';
+    }
+
+    // Update platform meshes
+    updatePlatformMeshes();
+    updateParticles(dt);
+
+    // Ball position
+    ballGroup.position.set(currentBallX, ballY, 0);
+    ballLight.position.set(currentBallX, ballY + 2, 2);
+    ballMesh.rotation.z += dt * 3;
+    ballMesh.rotation.x += dt * 2;
+
+    // Trail
+    trailPoints.unshift(new THREE.Vector3(currentBallX, ballY, 0));
+    if (trailPoints.length > MAX_TRAIL) trailPoints.pop();
+    trailGeom.setFromPoints(trailPoints);
+
+    // Ball emissive based on platform
+    ballMat.emissiveIntensity = isOnPlatform ? 0.8 + Math.sin(songTime * 8) * 0.2 : 0.2;
+    glowMat.opacity = isOnPlatform ? 0.15 : 0.05;
+
+    // Point light follow ball
+    pointLight.position.set(currentBallX, ballY + 1, 0);
+    pointLight.intensity = isOnPlatform ? 4 : 1.5;
+  }
+
+  // Camera
+  const camTargetX = currentBallX * 0.2;
+  camera.position.x += (camTargetX - camera.position.x) * 0.05;
+  camera.position.y = CAMERA_HEIGHT;
+  camera.position.z = CAMERA_BACK;
+  camera.lookAt(camera.position.x * 0.3, 0.5, -8);
+
+  // Ambient beat pulse (simulated)
+  if (gameRunning) {
+    const pulse = Math.sin(songTime * 8.73) * 0.5 + 0.5;
+    ambientLight.intensity = 1.0 + pulse * 0.3;
+    rimLight.intensity = 1.0 + pulse * 0.4;
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ─── EVENT LISTENERS ─────────────────────────────────────────────────────────
+function showDifficultyPicker(osuTexts) {
+  const picker = document.getElementById('diff-picker');
+  picker.style.display = 'flex';
+  // Clear old buttons (keep the title label)
+  while (picker.children.length > 1) picker.removeChild(picker.lastChild);
+
+  // Parse basic metadata from each .osu text to show in button
+  osuTexts.forEach((text, i) => {
+    const lines = text.split('\n').map(l => l.trim());
+    let title = '', version = '', cs = '?', stars = '';
+    for (const l of lines) {
+      if (l.startsWith('Title:')) title = l.slice(6).trim();
+      if (l.startsWith('Version:')) version = l.slice(8).trim();
+      if (l.startsWith('CircleSize:')) cs = parseFloat(l.split(':')[1]).toFixed(1);
+    }
+    // Rough star rating approximation from CS (just cosmetic)
+    const csNum = parseFloat(cs);
+    const starCount = Math.max(1, Math.min(8, Math.round(csNum * 0.8 + 1)));
+    stars = '★'.repeat(starCount) + '☆'.repeat(Math.max(0, 8 - starCount));
+
+    const btn = document.createElement('button');
+    btn.className = 'diff-btn';
+    btn.innerHTML = `<span>${version || ('Difficulty ' + (i+1))}</span><span class="diff-stars">${stars} CS${cs}</span>`;
+    btn.addEventListener('click', () => {
+      picker.style.display = 'none';
+      try {
+        const data = parseOsuCatch(text);
+        if (data.notes.length === 0) { alert('No hit objects found in this difficulty.'); return; }
+        startGame(data);
+      } catch (err) { alert('Failed to parse: ' + err.message); }
+    });
+    picker.appendChild(btn);
+  });
+}
+
+document.getElementById('file-input').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  // Hide previous diff picker
+  document.getElementById('diff-picker').style.display = 'none';
+
+  if (file.name.endsWith('.osz')) {
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const osuFiles = Object.keys(zip.files).filter(name => name.endsWith('.osu') && !zip.files[name].dir);
+      if (osuFiles.length === 0) { alert('No .osu file found inside the .osz archive.'); return; }
+      // Load all .osu texts
+      const texts = await Promise.all(osuFiles.map(name => zip.files[name].async('string')));
+      if (texts.length === 1) {
+        // Only one diff — just start
+        try {
+          const data = parseOsuCatch(texts[0]);
+          if (data.notes.length === 0) { alert('No hit objects found.'); return; }
+          startGame(data);
+        } catch (err) { alert('Failed to parse .osu: ' + err.message); }
+      } else {
+        // Sort by CircleSize for display
+        const withCs = texts.map(t => {
+          const m = t.match(/CircleSize\s*:\s*([\d.]+)/);
+          return { text: t, cs: m ? parseFloat(m[1]) : 5 };
+        }).sort((a, b) => a.cs - b.cs);
+        showDifficultyPicker(withCs.map(w => w.text));
+      }
+    } catch (err) { alert('Failed to load .osz file: ' + err.message); }
+  } else {
+    // Plain .osu
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = parseOsuCatch(ev.target.result);
+        if (data.notes.length === 0) { alert('No hit objects found. Make sure this is an osu! beatmap file.'); return; }
+        startGame(data);
+      } catch (err) { alert('Failed to parse .osu file: ' + err.message); }
+    };
+    reader.readAsText(file);
+  }
+});
+
+document.getElementById('demo-btn').addEventListener('click', () => {
+  const data = generateDemoNotes();
+  startGame(data);
+});
+
+document.getElementById('restart-btn').addEventListener('click', () => {
+  if (gameData) startGame(gameData);
+});
+
+// ─── PAUSE CONTROLS ───────────────────────────────────────────────────────────
+function togglePause() {
+  if (!gameRunning || gameOver || countdownActive) return;
+  paused = !paused;
+  document.getElementById('pause-menu').style.display = paused ? 'flex' : 'none';
+  document.getElementById('pause-btn').textContent = paused ? '▶' : '⏸';
+  if (!paused) lastTime = null; // reset dt so no time-skip on resume
+}
+
+document.getElementById('pause-btn').addEventListener('click', togglePause);
+document.getElementById('resume-btn').addEventListener('click', togglePause);
+document.getElementById('pause-restart-btn').addEventListener('click', () => {
+  if (gameData) startGame(gameData);
+});
+document.getElementById('pause-quit-btn').addEventListener('click', () => {
+  paused = false;
+  gameRunning = false;
+  gameOver = false;
+  countdownActive = false;
+  document.getElementById('pause-menu').style.display = 'none';
+  document.getElementById('pause-btn').style.display = 'none';
+  document.getElementById('overlay').classList.remove('hidden');
+  document.getElementById('game-over').classList.remove('visible');
+});
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') togglePause();
+});
+
+// Start render loop
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
