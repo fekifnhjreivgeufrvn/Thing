@@ -3,11 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TERRAINBEATS — osu!catch Terrain Rhythm</title>
+<title>STELLARRUN — Cosmic Terrain Runner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; }
-  #canvas { display: block; width: 100vw; height: 100vh; }
+  #bg-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
+  #canvas { display: block; width: 100vw; height: 100vh; position: relative; z-index: 1; }
 
   #ui {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -62,6 +65,14 @@
     position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
     background: rgba(255,255,255,0.08);
   }
+  /* Landing flash overlay */
+  #land-flash {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 80%, rgba(125,232,255,0.28) 0%, transparent 65%);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.06s ease-out;
+  }
+  #land-flash.flash { opacity: 1; transition: none; }
   #progress-fill {
     height: 100%; width: 0%;
     background: linear-gradient(90deg, #7de8ff, #ff88cc);
@@ -168,6 +179,96 @@
   }
   #restart-btn:hover { background: rgba(125,232,255,0.25); box-shadow: 0 0 20px rgba(125,232,255,0.3); }
 
+  /* ── PASS SCREEN ── */
+  #pass-screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 40%, rgba(0,30,60,0.97) 0%, rgba(0,0,0,0.97) 100%);
+    backdrop-filter: blur(12px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.7s ease;
+    z-index: 20;
+  }
+  #pass-screen.visible { opacity: 1; pointer-events: all; }
+
+  #pass-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 72px; font-weight: 900; letter-spacing: 8px;
+    background: linear-gradient(135deg, #7de8ff 0%, #ffffff 40%, #aaf0ff 70%, #44ccff 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    margin-bottom: 6px;
+    animation: passGlow 2s ease-in-out infinite alternate;
+  }
+  @keyframes passGlow {
+    from { filter: drop-shadow(0 0 18px rgba(125,232,255,0.5)); }
+    to   { filter: drop-shadow(0 0 40px rgba(125,232,255,1.0)); }
+  }
+
+  #pass-subtitle {
+    font-size: 11px; letter-spacing: 10px; color: rgba(125,232,255,0.5);
+    margin-bottom: 48px; text-transform: uppercase;
+  }
+
+  #pass-stats {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    margin-bottom: 48px;
+  }
+  .pass-stat-row {
+    display: flex; gap: 48px;
+  }
+  .pass-stat {
+    text-align: center; min-width: 120px;
+  }
+  .pass-stat-label {
+    font-size: 9px; letter-spacing: 4px; color: rgba(255,255,255,0.35);
+    margin-bottom: 4px; text-transform: uppercase;
+  }
+  .pass-stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 26px; font-weight: 700; color: #7de8ff;
+  }
+  .pass-stat-value.gold { color: #ffcc44; }
+
+  #pass-grade {
+    font-family: 'Orbitron', monospace;
+    font-size: 96px; font-weight: 900;
+    color: #ffcc44;
+    filter: drop-shadow(0 0 30px rgba(255,204,68,0.7));
+    margin-bottom: 48px;
+    animation: gradeFloat 3s ease-in-out infinite;
+  }
+  @keyframes gradeFloat {
+    0%,100% { transform: translateY(0px); }
+    50%      { transform: translateY(-8px); }
+  }
+
+  #pass-divider {
+    width: 280px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(125,232,255,0.4), transparent);
+    margin-bottom: 40px;
+  }
+
+  .pass-btn-row { display: flex; gap: 16px; }
+  .pass-btn {
+    padding: 14px 36px; border-radius: 8px; cursor: pointer;
+    font-size: 12px; letter-spacing: 3px;
+    font-family: 'Courier New', monospace;
+    transition: all 0.2s;
+  }
+  #pass-retry-btn {
+    border: 1px solid #7de8ff; color: #7de8ff;
+    background: rgba(125,232,255,0.08);
+  }
+  #pass-retry-btn:hover { background: rgba(125,232,255,0.22); box-shadow: 0 0 20px rgba(125,232,255,0.3); }
+  #pass-menu-btn {
+    border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.04);
+  }
+  #pass-menu-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
   .diff-btn {
     width: 100%; padding: 10px 20px;
     border: 1px solid rgba(255,255,255,0.15);
@@ -184,7 +285,9 @@
 </style>
 </head>
 <body>
+<canvas id="bg-canvas"></canvas>
 <canvas id="canvas"></canvas>
+<audio id="game-audio" preload="auto" style="display:none"></audio>
 
 <div id="ui">
   <div id="header">
@@ -257,6 +360,7 @@
   <div id="progress-bar-container">
     <div id="progress-fill" id="progress-fill"></div>
   </div>
+  <div id="land-flash"></div>
 
   <div id="judgement-text"></div>
   <div id="combo-display"></div>
@@ -297,6 +401,39 @@
     <div id="final-combo"></div>
     <button id="restart-btn">↺ RESTART</button>
   </div>
+
+  <div id="pass-screen">
+    <div id="pass-title">CLEARED</div>
+    <div id="pass-subtitle">STAGE COMPLETE</div>
+    <div id="pass-grade">S</div>
+    <div id="pass-stats">
+      <div class="pass-stat-row">
+        <div class="pass-stat">
+          <div class="pass-stat-label">Score</div>
+          <div class="pass-stat-value gold" id="pass-score">000000</div>
+        </div>
+        <div class="pass-stat">
+          <div class="pass-stat-label">Max Combo</div>
+          <div class="pass-stat-value" id="pass-combo">0x</div>
+        </div>
+      </div>
+      <div class="pass-stat-row">
+        <div class="pass-stat">
+          <div class="pass-stat-label">Platforms</div>
+          <div class="pass-stat-value" id="pass-platforms">0</div>
+        </div>
+        <div class="pass-stat">
+          <div class="pass-stat-label">Accuracy</div>
+          <div class="pass-stat-value" id="pass-accuracy">0%</div>
+        </div>
+      </div>
+    </div>
+    <div id="pass-divider"></div>
+    <div class="pass-btn-row">
+      <button class="pass-btn" id="pass-retry-btn">↺ RETRY</button>
+      <button class="pass-btn" id="pass-menu-btn">⌂ MENU</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -318,7 +455,8 @@ const OSU_CATCH_CS_DEFAULT = 5;
 
 // ─── THREE SETUP ─────────────────────────────────────────────────────────────
 const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 0); // transparent — bg-canvas shows through
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -326,8 +464,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.2;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x000814, 0.022);
-scene.background = new THREE.Color(0x000814);
+scene.fog = new THREE.FogExp2(0x000510, 0.018); // keep depth fog for platforms
+// scene.background left null — bg-canvas renders behind
 
 const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 800);
 
@@ -339,6 +477,205 @@ function resize() {
 }
 resize();
 window.addEventListener('resize', resize);
+
+// ─── BACKGROUND: PARALLAX STARFIELD + COSMIC FOG ─────────────────────────────
+const bgCanvas = document.getElementById('bg-canvas');
+const bgCtx = bgCanvas.getContext('2d');
+
+function resizeBgCanvas() {
+  bgCanvas.width  = window.innerWidth;
+  bgCanvas.height = window.innerHeight;
+}
+resizeBgCanvas();
+window.addEventListener('resize', resizeBgCanvas);
+
+// ─── BACKGROUND STATE ────────────────────────────────────────────────────────
+// Stars are stored in 3-D (x, y, z) normalized space.
+// Each frame z decreases (star flies toward camera). When z <= 0, reset to far end.
+// Screen position = vanishX + x/z * fov,  vanishY + y/z * fov
+// The vanishing point shifts with camera.position.x to match lane yaw.
+
+const BG_STAR_COUNT = 320;
+const BG_Z_FAR  = 1.0;   // spawn depth
+const BG_Z_NEAR = 0.02;  // cull depth (just before camera)
+const BG_SPEED_BASE = 0.04; // z units consumed per second at normal scroll
+
+const bgStars = [];
+const BG_STAR_COLORS_RAW = [
+  [255,255,255], [180,215,255], [255,200,160], [200,170,255], [130,240,255],
+];
+
+(function initBgStars() {
+  for (let i = 0; i < BG_STAR_COUNT; i++) {
+    const col = BG_STAR_COLORS_RAW[Math.floor(Math.random() * BG_STAR_COLORS_RAW.length)];
+    bgStars.push({
+      x: (Math.random() - 0.5) * 2,   // -1..1 lateral
+      y: (Math.random() - 0.5) * 1.4, // -0.7..0.7 vertical
+      z: Math.random() * BG_Z_FAR,    // start scattered across depth
+      baseR: col,
+      twinklePhase: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.5 + Math.random() * 1.8,
+      size: 0.6 + Math.random() * 2.2, // base radius at z=1; grows as z→0
+    });
+  }
+})();
+
+// Fog blobs — screen-space ellipses, slow drift, parallax via yaw offset
+const FOG_BLOBS = [];
+(function initFog() {
+  const palette = [
+    [20,  0, 90], [0, 15, 80], [0, 55, 75],
+    [65,  0, 70], [0, 35, 55], [80, 20, 40], [10, 50, 80], [40, 0, 60],
+  ];
+  for (let i = 0; i < 8; i++) {
+    const c = palette[i % palette.length];
+    FOG_BLOBS.push({
+      // normalized screen coords 0-1
+      bx: Math.random(), by: 0.1 + Math.random() * 0.8,
+      rw: 0.22 + Math.random() * 0.36,
+      rh: 0.11 + Math.random() * 0.22,
+      rot: Math.random() * Math.PI,
+      driftX: (Math.random() - 0.5) * 7e-6,
+      driftY: (Math.random() - 0.5) * 3e-6,
+      r: c[0], g: c[1], b: c[2],
+      baseAlpha: 0.03 + Math.random() * 0.055,
+      pulsePhase: Math.random() * Math.PI * 2,
+      pulseSpeed: 0.08 + Math.random() * 0.18,
+      // How strongly this blob shifts with camera yaw (depth proxy)
+      yawScale: 0.015 + Math.random() * 0.04,
+    });
+  }
+})();
+
+// Shooting stars
+const SHOOTING_STARS = [];
+let _nextShoot = 2 + Math.random() * 5;
+function spawnShootingStar() {
+  const angle = 0.3 + Math.random() * 0.5;
+  SHOOTING_STARS.push({
+    x: Math.random() * 0.75, y: Math.random() * 0.45,
+    angle, speed: 0.45 + Math.random() * 0.65,
+    trail: 0.05 + Math.random() * 0.10,
+    life: 0, maxLife: 0.35 + Math.random() * 0.45,
+  });
+}
+
+let _bgTime = 0;
+
+function drawBackground(dt, smoothCamX, songT) {
+  _bgTime += dt;
+  const W = bgCanvas.width, H = bgCanvas.height;
+  const cx = W * 0.5, cy = H * 0.5;
+
+  // Vanishing point follows camera X — same subtle fraction as lookAt offset
+  // camera.position.x is typically in range ~[-2, 2], scale to pixels
+  const vanishX = cx - smoothCamX * (W / 14);
+  const vanishY = cy * 0.72; // slightly above center, matching camera lookAt Y
+  const fovX = W * 0.55;
+  const fovY = H * 0.55;
+
+  // ── Deep-space gradient ──────────────────────────────────────────────────
+  const hShift = Math.sin(_bgTime * 0.032) * 10;
+  const grd = bgCtx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0,    `hsl(${220 + hShift},85%,2.5%)`);
+  grd.addColorStop(0.55, `hsl(${240 + hShift},65%,1.8%)`);
+  grd.addColorStop(1,    `hsl(${210 + hShift},75%,1.2%)`);
+  bgCtx.fillStyle = grd;
+  bgCtx.fillRect(0, 0, W, H);
+
+  // ── Nebula fog blobs ─────────────────────────────────────────────────────
+  for (const b of FOG_BLOBS) {
+    b.bx = (b.bx + b.driftX + 1) % 1;
+    b.by = (b.by + b.driftY + 1) % 1;
+    // Shift horizontally with camera yaw — closer-feeling blobs shift more
+    const yawOff = smoothCamX * b.yawScale;
+    const alpha = b.baseAlpha + Math.sin(_bgTime * b.pulseSpeed + b.pulsePhase) * 0.01;
+    const bcx = ((b.bx - yawOff + 1.5) % 1) * W;
+    const bcy = b.by * H;
+    const rw  = b.rw * W;
+    bgCtx.save();
+    bgCtx.translate(bcx, bcy);
+    bgCtx.rotate(b.rot + _bgTime * 0.005);
+    bgCtx.scale(1, (b.rh * H) / rw);
+    const fg = bgCtx.createRadialGradient(0, 0, 0, 0, 0, rw);
+    fg.addColorStop(0,    `rgba(${b.r},${b.g},${b.b},${alpha})`);
+    fg.addColorStop(0.45, `rgba(${b.r},${b.g},${b.b},${alpha * 0.3})`);
+    fg.addColorStop(1,    `rgba(${b.r},${b.g},${b.b},0)`);
+    bgCtx.fillStyle = fg;
+    bgCtx.beginPath();
+    bgCtx.arc(0, 0, rw, 0, Math.PI * 2);
+    bgCtx.fill();
+    bgCtx.restore();
+  }
+
+  // ── Perspective-projected forward-zoom stars ─────────────────────────────
+  // Speed scales with scroll (songT unused here — _bgTime provides steady motion)
+  const zSpeed = BG_SPEED_BASE * (1 + _bgTime * 0.0008); // very slowly accelerates
+  for (const s of bgStars) {
+    s.z -= zSpeed * dt * 60 * 0.016; // advance toward camera
+    if (s.z <= BG_Z_NEAR) {
+      // Recycle at the far end, random new lateral position
+      s.z = BG_Z_FAR;
+      s.x = (Math.random() - 0.5) * 2;
+      s.y = (Math.random() - 0.5) * 1.4;
+    }
+
+    // Perspective project — deeper = closer to vanishing point
+    const sx = vanishX + (s.x / s.z) * fovX;
+    const sy = vanishY + (s.y / s.z) * fovY;
+
+    // Cull if off-screen
+    if (sx < -20 || sx > W + 20 || sy < -20 || sy > H + 20) continue;
+
+    // Size and brightness grow as star approaches (z → 0)
+    const depth = 1 - s.z / BG_Z_FAR; // 0 at far, 1 at near
+    const r = s.size * (0.4 + depth * 2.2);
+    const twinkle = 0.35 + 0.65 * Math.sin(_bgTime * s.twinkleSpeed + s.twinklePhase);
+    const opacity = Math.min(1, (0.2 + depth * 0.85) * twinkle);
+    const [cr, cg, cb] = s.baseR;
+
+    bgCtx.beginPath();
+    bgCtx.arc(sx, sy, r, 0, Math.PI * 2);
+    bgCtx.fillStyle = `rgba(${cr},${cg},${cb},${opacity})`;
+    bgCtx.fill();
+
+    // Cross flare for the brightest close stars
+    if (r > 2.8) {
+      const fl = r * 3.2;
+      bgCtx.strokeStyle = `rgba(${cr},${cg},${cb},${opacity * 0.2})`;
+      bgCtx.lineWidth = 0.7;
+      bgCtx.beginPath();
+      bgCtx.moveTo(sx - fl, sy); bgCtx.lineTo(sx + fl, sy);
+      bgCtx.moveTo(sx, sy - fl); bgCtx.lineTo(sx, sy + fl);
+      bgCtx.stroke();
+    }
+  }
+
+  // ── Shooting stars ───────────────────────────────────────────────────────
+  _nextShoot -= dt;
+  if (_nextShoot <= 0) { spawnShootingStar(); _nextShoot = 4 + Math.random() * 10; }
+  for (let i = SHOOTING_STARS.length - 1; i >= 0; i--) {
+    const ss = SHOOTING_STARS[i];
+    ss.life += dt;
+    if (ss.life >= ss.maxLife) { SHOOTING_STARS.splice(i, 1); continue; }
+    const t    = ss.life / ss.maxLife;
+    const fade = t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85;
+    const hx   = (ss.x + Math.cos(ss.angle) * ss.speed * ss.life) * W;
+    const hy   = (ss.y + Math.sin(ss.angle) * ss.speed * ss.life) * H;
+    const tx   = hx - Math.cos(ss.angle) * ss.trail * W;
+    const ty   = hy - Math.sin(ss.angle) * ss.trail * H;
+    const sg   = bgCtx.createLinearGradient(tx, ty, hx, hy);
+    sg.addColorStop(0, `rgba(255,255,255,0)`);
+    sg.addColorStop(1, `rgba(255,255,255,${fade})`);
+    bgCtx.beginPath();
+    bgCtx.moveTo(tx, ty); bgCtx.lineTo(hx, hy);
+    bgCtx.strokeStyle = sg; bgCtx.lineWidth = 1.8; bgCtx.stroke();
+    bgCtx.beginPath();
+    bgCtx.arc(hx, hy, 2.2, 0, Math.PI * 2);
+    bgCtx.fillStyle = `rgba(255,255,255,${fade})`;
+    bgCtx.fill();
+  }
+}
 
 // ─── LIGHTING ─────────────────────────────────────────────────────────────────
 const ambientLight = new THREE.AmbientLight(0x112244, 1.2);
@@ -571,6 +908,8 @@ function parseOsuCatch(text) {
     }
     if (section === '[General]') {
       if (line.startsWith('Mode:')) mode = parseInt(line.split(':')[1].trim());
+      if (line.startsWith('AudioFilename:')) metadata.audioFilename = line.slice(14).trim();
+      if (line.startsWith('AudioLeadIn:')) metadata.audioLeadIn = parseInt(line.split(':')[1].trim());
     }
     if (section === '[TimingPoints]') {
       const parts = line.split(',');
@@ -749,6 +1088,89 @@ let lastTime = null;
 let countdown = 0;
 let countdownActive = false;
 let paused = false;
+
+// ─── AUDIO HELPERS ───────────────────────────────────────────────────────────
+const gameAudio = document.getElementById('game-audio');
+let audioOffset = 0; // seconds — from .osu AudioLeadIn or timing offset
+
+function audioLoad(blobUrl, leadInSec) {
+  if (!blobUrl) return;
+  gameAudio.src = blobUrl;
+  gameAudio.load();
+  audioOffset = leadInSec || 0;
+}
+
+function audioPlay() {
+  if (!gameAudio.src || gameAudio.src === window.location.href) return;
+  // songTime is 0 when this is called; music starts after lead-in
+  const target = Math.max(0, songTime - audioOffset);
+  gameAudio.currentTime = target;
+  gameAudio.play().catch(() => {}); // ignore autoplay block; user already interacted via file picker
+}
+
+function audioPause() { gameAudio.pause(); }
+
+function audioResume() {
+  if (!gameAudio.src || gameAudio.src === window.location.href) return;
+  // Sync position to songTime in case drift occurred
+  const target = Math.max(0, songTime - audioOffset);
+  gameAudio.currentTime = target;
+  gameAudio.play().catch(() => {});
+}
+
+function audioStop() { gameAudio.pause(); gameAudio.currentTime = 0; }
+
+// ─── HITSOUND (Web Audio API) ────────────────────────────────────────────────
+const _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playHitsound(combo) {
+  // Resume context if suspended (browser autoplay policy)
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+
+  const now = _audioCtx.currentTime;
+
+  // --- Punchy low thud ---
+  const osc1 = _audioCtx.createOscillator();
+  const gain1 = _audioCtx.createGain();
+  osc1.type = 'sine';
+  // Pitch drops quickly: high impact thud feel
+  osc1.frequency.setValueAtTime(200, now);
+  osc1.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+  gain1.gain.setValueAtTime(0.55, now);
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+  osc1.connect(gain1);
+  gain1.connect(_audioCtx.destination);
+  osc1.start(now);
+  osc1.stop(now + 0.18);
+
+  // --- Crisp high tick (combo-scaled brightness) ---
+  const osc2 = _audioCtx.createOscillator();
+  const gain2 = _audioCtx.createGain();
+  osc2.type = 'triangle';
+  const pitch = Math.min(1200, 600 + combo * 8); // higher pitch with combo
+  osc2.frequency.setValueAtTime(pitch, now);
+  osc2.frequency.exponentialRampToValueAtTime(pitch * 0.6, now + 0.06);
+  gain2.gain.setValueAtTime(0.3, now);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+  osc2.connect(gain2);
+  gain2.connect(_audioCtx.destination);
+  osc2.start(now);
+  osc2.stop(now + 0.1);
+
+  // --- Noise burst for impact texture ---
+  const bufLen = Math.floor(_audioCtx.sampleRate * 0.05);
+  const buf = _audioCtx.createBuffer(1, bufLen, _audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+  const noise = _audioCtx.createBufferSource();
+  noise.buffer = buf;
+  const gainN = _audioCtx.createGain();
+  gainN.gain.setValueAtTime(0.18, now);
+  gainN.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  noise.connect(gainN);
+  gainN.connect(_audioCtx.destination);
+  noise.start(now);
+}
 
 // ─── INPUT ───────────────────────────────────────────────────────────────────
 let mouseX = 0;
@@ -935,7 +1357,29 @@ function onBallLand() {
   showJudgement('LAND!', '#7de8ff');
   showCombo(combo);
   document.getElementById('combo-val').textContent = combo + 'x';
-  for (let k = 0; k < 6; k++) spawnParticle(currentBallX, ballY, 0, 0x7de8ff);
+
+  // Hitsound
+  playHitsound(combo);
+
+  // Screen flash
+  const flash = document.getElementById('land-flash');
+  // Color shifts warmer at high combos
+  const hue = combo > 20 ? 'rgba(255,180,80,0.32)' : combo > 10 ? 'rgba(180,255,120,0.28)' : 'rgba(125,232,255,0.28)';
+  flash.style.background = `radial-gradient(ellipse at 50% 80%, ${hue} 0%, transparent 65%)`;
+  flash.classList.add('flash');
+  requestAnimationFrame(() => { flash.classList.remove('flash'); });
+
+  // Particles — ring burst outward from landing point
+  const landColor = combo > 20 ? 0xff8844 : combo > 10 ? 0x88ff44 : 0x7de8ff;
+  const count = Math.min(6 + Math.floor(combo / 5), 18);
+  for (let k = 0; k < count; k++) {
+    const angle = (k / count) * Math.PI * 2;
+    spawnParticle(currentBallX, ballY, 0, landColor, Math.cos(angle) * 3.5, 2 + Math.random() * 2, Math.sin(angle) * 1.2);
+  }
+  // Extra upward sparks
+  for (let k = 0; k < 5; k++) {
+    spawnParticle(currentBallX, ballY + 0.2, 0, 0xffffff, (Math.random()-0.5)*2, 4 + Math.random()*3, (Math.random()-0.5));
+  }
 }
 function addScore(pts) {
   score += pts * (1 + combo * 0.1);
@@ -966,6 +1410,10 @@ const PLATFORM_CHECK_INTERVAL = 0.15; // seconds
 
 function startGame(data) {
   gameData = data;
+  audioStop(); // stop any previously playing music
+  // Load new audio if available; osu lead-in is not always present, default 0
+  const leadIn = (data.metadata && data.metadata.audioLeadIn) ? data.metadata.audioLeadIn / 1000 : 0;
+  audioLoad(data.audioBlobUrl || null, leadIn);
   // AR drives scroll speed: AR 5 = base, AR 0 = 50% speed, AR 10 = 150% speed
   const ar = (data.ar !== undefined ? data.ar : (data.metadata && data.metadata.ar !== undefined ? data.metadata.ar : 5));
   scrollSpeed = SCROLL_SPEED_BASE * (0.5 + ar * 0.1);
@@ -999,6 +1447,8 @@ function startGame(data) {
     platformPool.push(item.mesh);
   }
   activeMeshes.length = 0;
+  // Hide every active particle before clearing so they don't linger in the scene
+  for (const p of particles) { p.mesh.visible = false; particlePool.push(p); }
   particles.length = 0;
 
   document.getElementById('ar-val').textContent = `AR${ar.toFixed(1)} · ${scrollSpeed.toFixed(0)} u/s`;
@@ -1008,6 +1458,7 @@ function startGame(data) {
   document.getElementById('health-fill').style.background = 'linear-gradient(90deg, #ff4488, #ff8844)';
   document.getElementById('song-name').textContent = `${data.metadata.artist} — ${data.metadata.title}`;
   document.getElementById('game-over').classList.remove('visible');
+  document.getElementById('pass-screen').classList.remove('visible');
   document.getElementById('overlay').classList.add('hidden');
   document.getElementById('countdown').style.display = 'flex';
   document.getElementById('countdown-num').textContent = '3';
@@ -1020,6 +1471,7 @@ function triggerGameOver() {
   gameOver = true;
   gameRunning = false;
   paused = false;
+  audioStop();
   document.getElementById('pause-btn').style.display = 'none';
   document.getElementById('pause-menu').style.display = 'none';
   document.getElementById('final-score').textContent = 'SCORE: ' + Math.floor(score).toLocaleString();
@@ -1032,11 +1484,54 @@ function triggerGameOver() {
   }
 }
 
+function triggerClear() {
+  gameOver = true;
+  gameRunning = false;
+  paused = false;
+  audioStop();
+  document.getElementById('pause-btn').style.display = 'none';
+  document.getElementById('pause-menu').style.display = 'none';
+
+  // Grade: based on score relative to max possible (100 pts * combo multiplier per platform)
+  const totalPlats = platforms.length;
+  const accuracy = totalPlats > 0 ? Math.min(100, Math.round((combo / totalPlats) * 100)) : 100;
+  const pct = score / Math.max(1, totalPlats * 100);
+  let grade = 'D';
+  if (pct >= 0.95) grade = 'S';
+  else if (pct >= 0.80) grade = 'A';
+  else if (pct >= 0.65) grade = 'B';
+  else if (pct >= 0.50) grade = 'C';
+
+  document.getElementById('pass-score').textContent = String(Math.floor(score)).padStart(6, '0');
+  document.getElementById('pass-combo').textContent = maxCombo + 'x';
+  document.getElementById('pass-platforms').textContent = totalPlats;
+  document.getElementById('pass-accuracy').textContent = accuracy + '%';
+  document.getElementById('pass-grade').textContent = grade;
+
+  // Grade colour
+  const gradeColors = { S: '#ffcc44', A: '#88ff88', B: '#7de8ff', C: '#ffaa44', D: '#ff6666' };
+  document.getElementById('pass-grade').style.color = gradeColors[grade] || '#7de8ff';
+  document.getElementById('pass-grade').style.filter = `drop-shadow(0 0 30px ${gradeColors[grade]}aa)`;
+
+  // Victory particle burst
+  for (let i = 0; i < 40; i++) {
+    const angle = (i / 40) * Math.PI * 2;
+    spawnParticle(currentBallX, ballY, 0, [0x7de8ff, 0xffcc44, 0x88ff88, 0xff88cc][i % 4],
+      Math.cos(angle) * 5, Math.random() * 6 + 2, Math.sin(angle) * 2);
+  }
+
+  document.getElementById('pass-screen').classList.add('visible');
+}
+
 function animate(timestamp) {
   requestAnimationFrame(animate);
 
   const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.05) : 0.016;
   lastTime = timestamp;
+
+  // Mirror the camera's smoothed X for background parallax — same lag feel as lane yaw
+  const smoothCamX = camera.position.x; // already lerped at 0.05 per frame
+  drawBackground(dt, smoothCamX, typeof songTime !== 'undefined' ? songTime : 0);
 
   // ── PAUSE ────────────────────────────────────────────────────────────────────
   if (paused) {
@@ -1055,6 +1550,7 @@ function animate(timestamp) {
       gameRunning = true;
       document.getElementById('countdown').style.display = 'none';
       document.getElementById('pause-btn').style.display = 'flex';
+      audioPlay(); // ← start the music!
     }
 
     // During countdown: allow ball X movement, keep ball on start platform, don't scroll
@@ -1091,25 +1587,33 @@ function animate(timestamp) {
     // Auto-jump check (before collision so jump fires while still grounded)
     checkAutoJump();
 
-    // Platform collision — only land when ball is moving downward (ballVY <= 0)
-    const groundY = checkPlatformCollision(currentBallX, ballY);
-    if (groundY !== null && ballVY <= 0) {
-      const wasAirborne = !isOnPlatform;
-      ballY = groundY + 0.55;
-      ballVY = 0;
-      if (wasAirborne) {
-        onBallLand();
-      } else {
-        isOnPlatform = true;
-      }
-    } else if (groundY === null) {
-      isOnPlatform = false;
-      ballVY -= GRAVITY * dt;
-      ballY += ballVY * dt;
+    // Platform collision — sub-stepped so a fast fall can never tunnel through a platform.
+    // We split the frame into small steps where the ball moves at most MAX_STEP per step.
+    const MAX_STEP = 0.3; // world units — safely smaller than platform thickness
+    let remaining = dt;
+    while (remaining > 0) {
+      // How far will the ball travel vertically this sub-step?
+      const subDt = Math.min(remaining, Math.abs(ballVY) > 0 ? MAX_STEP / Math.max(Math.abs(ballVY), 0.001) : remaining);
+      remaining -= subDt;
 
-      // Instant death — no health drain, just die immediately once clearly off any platform
-      if (ballY < PLATFORM_H / 2 - 1.5 && !gameOver) {
-        triggerGameOver();
+      const groundY = checkPlatformCollision(currentBallX, ballY);
+      if (groundY !== null && ballVY <= 0) {
+        const wasAirborne = !isOnPlatform;
+        ballY = groundY + 0.55;
+        ballVY = 0;
+        isOnPlatform = true;
+        if (wasAirborne) onBallLand();
+        break; // landed — no need to continue sub-steps
+      } else if (groundY === null) {
+        isOnPlatform = false;
+        ballVY -= GRAVITY * subDt;
+        ballY += ballVY * subDt;
+
+        // Instant death once clearly below platform level
+        if (ballY < PLATFORM_H / 2 - 1.5 && !gameOver) {
+          triggerGameOver();
+          break;
+        }
       }
     }
 
@@ -1129,9 +1633,7 @@ function animate(timestamp) {
 
     // Check if song ended
     if (songTime > totalTime + 2) {
-      triggerGameOver();
-      document.getElementById('game-over-title').textContent = 'CLEAR!';
-      document.getElementById('game-over-title').style.color = '#7de8ff';
+      triggerClear();
     }
 
     // Update platform meshes
@@ -1204,6 +1706,7 @@ function showDifficultyPicker(osuTexts) {
       try {
         const data = parseOsuCatch(text);
         if (data.notes.length === 0) { alert('No hit objects found in this difficulty.'); return; }
+        data.audioBlobUrl = window._pendingAudioBlobUrl || null;
         startGame(data);
       } catch (err) { alert('Failed to parse: ' + err.message); }
     });
@@ -1214,7 +1717,6 @@ function showDifficultyPicker(osuTexts) {
 document.getElementById('file-input').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
-  // Hide previous diff picker
   document.getElementById('diff-picker').style.display = 'none';
 
   if (file.name.endsWith('.osz')) {
@@ -1222,21 +1724,44 @@ document.getElementById('file-input').addEventListener('change', async e => {
       const zip = await JSZip.loadAsync(file);
       const osuFiles = Object.keys(zip.files).filter(name => name.endsWith('.osu') && !zip.files[name].dir);
       if (osuFiles.length === 0) { alert('No .osu file found inside the .osz archive.'); return; }
-      // Load all .osu texts
       const texts = await Promise.all(osuFiles.map(name => zip.files[name].async('string')));
+
+      // --- Extract audio blob from the zip ---
+      // Skip video files — some osz packages include .avi/.mp4/.flv background videos
+      const VIDEO_EXTS = ['.avi', '.mp4', '.flv', '.wmv', '.mov', '.mkv', '.mpg', '.mpeg'];
+      let audioBlobUrl = null;
+      const firstParsed = parseOsuCatch(texts[0]);
+      const audioFilename = firstParsed.metadata.audioFilename;
+      if (audioFilename) {
+        const isVideo = VIDEO_EXTS.some(ext => audioFilename.toLowerCase().endsWith(ext));
+        if (isVideo) {
+          console.warn('AudioFilename points to a video file, skipping:', audioFilename);
+        } else {
+          const audioKey = Object.keys(zip.files).find(
+            k => k.toLowerCase().endsWith(audioFilename.toLowerCase()) && !zip.files[k].dir
+          );
+          if (audioKey) {
+            const audioBlob = await zip.files[audioKey].async('blob');
+            if (window._currentAudioBlobUrl) URL.revokeObjectURL(window._currentAudioBlobUrl);
+            audioBlobUrl = URL.createObjectURL(audioBlob);
+            window._currentAudioBlobUrl = audioBlobUrl;
+          }
+        }
+      }
+
       if (texts.length === 1) {
-        // Only one diff — just start
         try {
           const data = parseOsuCatch(texts[0]);
           if (data.notes.length === 0) { alert('No hit objects found.'); return; }
+          data.audioBlobUrl = audioBlobUrl;
           startGame(data);
         } catch (err) { alert('Failed to parse .osu: ' + err.message); }
       } else {
-        // Sort by CircleSize for display
         const withCs = texts.map(t => {
           const m = t.match(/CircleSize\s*:\s*([\d.]+)/);
           return { text: t, cs: m ? parseFloat(m[1]) : 5 };
         }).sort((a, b) => a.cs - b.cs);
+        window._pendingAudioBlobUrl = audioBlobUrl;
         showDifficultyPicker(withCs.map(w => w.text));
       }
     } catch (err) { alert('Failed to load .osz file: ' + err.message); }
@@ -1269,7 +1794,12 @@ function togglePause() {
   paused = !paused;
   document.getElementById('pause-menu').style.display = paused ? 'flex' : 'none';
   document.getElementById('pause-btn').textContent = paused ? '▶' : '⏸';
-  if (!paused) lastTime = null; // reset dt so no time-skip on resume
+  if (paused) {
+    audioPause();
+  } else {
+    lastTime = null; // reset dt so no time-skip on resume
+    audioResume();
+  }
 }
 
 document.getElementById('pause-btn').addEventListener('click', togglePause);
@@ -1282,14 +1812,29 @@ document.getElementById('pause-quit-btn').addEventListener('click', () => {
   gameRunning = false;
   gameOver = false;
   countdownActive = false;
+  audioStop();
   document.getElementById('pause-menu').style.display = 'none';
   document.getElementById('pause-btn').style.display = 'none';
   document.getElementById('overlay').classList.remove('hidden');
   document.getElementById('game-over').classList.remove('visible');
+  document.getElementById('pass-screen').classList.remove('visible');
 });
 
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') togglePause();
+});
+
+// Pass screen buttons
+document.getElementById('pass-retry-btn').addEventListener('click', () => {
+  document.getElementById('pass-screen').classList.remove('visible');
+  if (gameData) startGame(gameData);
+});
+
+document.getElementById('pass-menu-btn').addEventListener('click', () => {
+  document.getElementById('pass-screen').classList.remove('visible');
+  audioStop();
+  document.getElementById('overlay').classList.remove('hidden');
+  gameRunning = false; gameOver = false;
 });
 
 // Start render loop
