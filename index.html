@@ -1257,39 +1257,31 @@ function updatePlatformMeshes() {
 // ─── COLLISION / GROUNDING ───────────────────────────────────────────────────
 // Ball is always rendered at world z=0. Platforms scroll past it.
 // We check if the platform's mesh currently straddles z=0.
-function checkPlatformCollision(ballX, ballY, ballVY_cur) {
-  const ballBottom = ballY - 0.55;
-  const ballTop    = ballY + 0.55;
-  const pTopY = PLATFORM_H / 2;   //  0.175
-  const pBotY = -PLATFORM_H / 2;  // -0.175
+function checkPlatformCollision(ballX, ballY) {
+  const ballBottom = ballY - 0.55; // ball radius
+  const pTopY = PLATFORM_H / 2;
+  const pBotY = -PLATFORM_H / 2;
 
   for (const item of activeMeshes) {
     const mesh = item.mesh;
     const p = item.platform;
 
-    const mz = mesh.position.z;
-    const mx = mesh.position.x;
+    // Mesh center position (world space)
+    const mz = mesh.position.z; // center z of platform mesh
+    const mx = mesh.position.x; // center x
 
-    const halfW = p.width / 2 + 0.3;
-    const halfD = p.depth / 2 + 0.3;
+    const halfW = (p.width / 2) + 0.3;  // small tolerance
+    const halfD = (p.depth / 2) + 0.3;
 
+    // Is the ball's x within platform x range?
     if (ballX < mx - halfW || ballX > mx + halfW) continue;
+
+    // Is z=0 (ball's world z) within the platform's z extent?
     if (0 < mz - halfD || 0 > mz + halfD) continue;
 
-    // Moving DOWN — land when ball bottom is within snap range of top face
-    if (ballVY_cur <= 0.05) {
-      if (ballBottom <= pTopY + 0.25 && ballBottom >= pBotY) {
-        return pTopY;
-      }
-    }
-
-    // Moving UP — block if ball top hits the underside of a platform above
-    // (prevents launching through a platform directly overhead)
-    if (ballVY_cur > 0.05) {
-      if (ballTop >= pBotY - 0.1 && ballTop <= pTopY + 0.55) {
-        // Hit ceiling: kill upward velocity
-        return 'ceiling';
-      }
+    // Is the ball bottom near the platform top (landing check)?
+    if (ballBottom <= pTopY + 0.15 && ballBottom >= pBotY - 0.6 && ballVY <= 0.05) {
+      return pTopY;
     }
   }
   return null;
@@ -1330,35 +1322,27 @@ function checkAutoJump() {
   const cpMesh = activeMeshes.find(m => m.platform === platforms[curIdx]);
   if (!cpMesh) return;
 
-  // Trailing edge of current platform in world Z (positive = behind ball)
+  // Trailing edge of current platform (goes from negative → 0 → positive as platform scrolls past)
   const trailingEdgeZ = cpMesh.mesh.position.z + platforms[curIdx].depth / 2;
 
   // Jump when trailing edge is within JUMP_LEAD world-units of z=0
   const JUMP_LEAD = 3.5;
   if (trailingEdgeZ < -JUMP_LEAD) return;
 
+  const cp = platforms[curIdx];
   const np = platforms[curIdx + 1];
-  const npMesh = activeMeshes.find(m => m.platform === np);
+  // Use songTime (not cp.time) so flight time reflects the actual moment the
+  // jump fires, not when the platform's front arrived (which overestimates).
+  // Target 1/4 into the next platform so the ball has room to ride without
+  // sliding off the trailing edge.
+  const dtToNext = (np.time - songTime) + (np.depth * 0.25) / scrollSpeed;
+  if (dtToNext <= 0) { jumpScheduled = true; return; }
 
-  // Time until the *middle* of the next platform reaches the ball
-  // Use the mesh position for precision when available, fall back to timing
-  let dtToNext;
-  if (npMesh) {
-    // How far the next platform's center still needs to travel to reach z=0
-    const npCenterZ = npMesh.mesh.position.z; // negative = ahead
-    dtToNext = Math.max(0.05, -npCenterZ / scrollSpeed);
-  } else {
-    dtToNext = Math.max(0.05, (np.time - songTime) + (np.depth * 0.25) / scrollSpeed);
-  }
+  // Solve for vy: flight time = 2*vy/g
+  const vy = (GRAVITY * dtToNext / 2);
 
-  // Solve projectile: need to be back at same Y after dtToNext seconds
-  // y(t) = vy*t - 0.5*g*t^2 = 0  →  vy = 0.5*g*t
-  const vy = GRAVITY * dtToNext * 0.5;
-
-  // Enforce a minimum arc height so the gap is always visible
-  const MIN_VY = 5;
-  ballVY = Math.max(MIN_VY, vy);
-  ballY += 0.2;          // lift off surface immediately
+  ballVY = Math.max(2, vy);
+  ballY += 0.15; // lift off surface before collision re-grabs us
   jumpScheduled = true;
   isOnPlatform = false;
   for (let k = 0; k < 8; k++) spawnParticle(currentBallX, ballY, 0, 0xffee44);
@@ -1379,6 +1363,7 @@ function onBallLand() {
 
   // Screen flash
   const flash = document.getElementById('land-flash');
+  // Color shifts warmer at high combos
   const hue = combo > 20 ? 'rgba(255,180,80,0.32)' : combo > 10 ? 'rgba(180,255,120,0.28)' : 'rgba(125,232,255,0.28)';
   flash.style.background = `radial-gradient(ellipse at 50% 80%, ${hue} 0%, transparent 65%)`;
   flash.classList.add('flash');
@@ -1391,14 +1376,9 @@ function onBallLand() {
     const angle = (k / count) * Math.PI * 2;
     spawnParticle(currentBallX, ballY, 0, landColor, Math.cos(angle) * 3.5, 2 + Math.random() * 2, Math.sin(angle) * 1.2);
   }
+  // Extra upward sparks
   for (let k = 0; k < 5; k++) {
     spawnParticle(currentBallX, ballY + 0.2, 0, 0xffffff, (Math.random()-0.5)*2, 4 + Math.random()*3, (Math.random()-0.5));
-  }
-
-  // If this was the last platform, trigger clear after a short delay
-  const curIdx = getStandingPlatformIdx();
-  if (curIdx >= 0 && curIdx === platforms.length - 1) {
-    setTimeout(() => { if (!gameOver) triggerClear(); }, 1800);
   }
 }
 function addScore(pts) {
@@ -1607,31 +1587,30 @@ function animate(timestamp) {
     // Auto-jump check (before collision so jump fires while still grounded)
     checkAutoJump();
 
-    // Platform collision — sub-stepped so a fast fall can never tunnel through.
-    const MAX_STEP = 0.25;
+    // Platform collision — sub-stepped so a fast fall can never tunnel through a platform.
+    // We split the frame into small steps where the ball moves at most MAX_STEP per step.
+    const MAX_STEP = 0.3; // world units — safely smaller than platform thickness
     let remaining = dt;
-    while (remaining > 0 && !gameOver) {
-      const subDt = Math.min(remaining, Math.abs(ballVY) > 0.001 ? MAX_STEP / Math.abs(ballVY) : remaining);
+    while (remaining > 0) {
+      // How far will the ball travel vertically this sub-step?
+      const subDt = Math.min(remaining, Math.abs(ballVY) > 0 ? MAX_STEP / Math.max(Math.abs(ballVY), 0.001) : remaining);
       remaining -= subDt;
 
-      const hit = checkPlatformCollision(currentBallX, ballY, ballVY);
-      if (hit === 'ceiling') {
-        // Bumped into platform underside while jumping — kill upward velocity
-        ballVY = Math.min(0, ballVY * -0.15);
-      } else if (hit !== null && ballVY <= 0.05) {
-        // Landing on top surface
+      const groundY = checkPlatformCollision(currentBallX, ballY);
+      if (groundY !== null && ballVY <= 0) {
         const wasAirborne = !isOnPlatform;
-        ballY = hit + 0.55;
+        ballY = groundY + 0.55;
         ballVY = 0;
         isOnPlatform = true;
         if (wasAirborne) onBallLand();
-        break;
-      } else {
+        break; // landed — no need to continue sub-steps
+      } else if (groundY === null) {
         isOnPlatform = false;
         ballVY -= GRAVITY * subDt;
-        ballY  += ballVY * subDt;
+        ballY += ballVY * subDt;
 
-        if (ballY < PLATFORM_H / 2 - 1.5) {
+        // Instant death once clearly below platform level
+        if (ballY < PLATFORM_H / 2 - 1.5 && !gameOver) {
           triggerGameOver();
           break;
         }
@@ -1649,12 +1628,11 @@ function animate(timestamp) {
     document.getElementById('health-fill').style.background = 'linear-gradient(90deg, #44ff88, #88ff44)';
 
     // Progress
-    const lastPlat = platforms[platforms.length - 1];
-    const totalTime = lastPlat ? lastPlat.endTime : 1;
+    const totalTime = platforms.length > 0 ? platforms[platforms.length - 1].time + 2 : 1;
     document.getElementById('progress-fill').style.width = Math.min(100, (songTime / totalTime) * 100) + '%';
 
-    // Clear: once songTime passes the end of the last platform (ball should be on it or just leaving)
-    if (!gameOver && songTime > totalTime + 1.5) {
+    // Check if song ended
+    if (songTime > totalTime + 2) {
       triggerClear();
     }
 
